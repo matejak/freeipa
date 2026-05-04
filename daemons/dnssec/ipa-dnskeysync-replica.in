@@ -177,7 +177,7 @@ keys_dn = DN(
 
 with open(paths.DNSSEC_HSM_PIN) as f:
     localhsm = LocalHSM(
-        paths.LIBSOFTHSM2_SO,
+        paths.LIBKRYOPTIC_SO,
         DNSSEC_TOKEN_LABEL,
         f.read()
     )

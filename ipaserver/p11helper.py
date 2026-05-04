@@ -486,6 +486,7 @@ def loadLibrary(module):
 # compat TODO
 CKM_AES_KEY_WRAP = 0x2109
 CKM_AES_KEY_WRAP_PAD = 0x210a
+CKM_AES_KEY_WRAP_KWP = 0x210b
 
 # TODO
 CKA_COPYABLE = 0x0017
@@ -684,7 +685,8 @@ def _set_wrapping_mech_parameters(mech_type, mech):
 
     Warning: do not dealloc param values, it is static variables
     """
-    if mech_type in (CKM_RSA_PKCS, CKM_AES_KEY_WRAP, CKM_AES_KEY_WRAP_PAD):
+    if mech_type in (CKM_RSA_PKCS, CKM_AES_KEY_WRAP,
+                     CKM_AES_KEY_WRAP_PAD, CKM_AES_KEY_WRAP_KWP):
         mech.pParameter = NULL
         mech.ulParameterLen = 0
     elif mech_type == CKM_RSA_PKCS_OAEP:
@@ -908,13 +910,8 @@ class P11_Helper:
             rv = self.p11.C_GetTokenInfo(slot, token_info_ptr)
             check_return_value(rv, 'get token info')
 
-            # softhsm always returns label 32 bytes long with padding made of
-            # whitespaces (#32), so we have to rstrip() padding and compare
-            # Label was created by softhsm-util so it is not our fault that
-            # there are #32 as padding (cffi initializes structures with
-            # zeroes)
-            # In case that this is not valid anymore, keep in mind backward
-            # compatibility
+            # PKCS#11 tokens return labels as 32 bytes padded with spaces,
+            # so we rstrip() before comparison
 
             if self.token_label == char_array_to_unicode(
                     token_info_ptr[0].label, 32).rstrip():
@@ -1046,7 +1043,7 @@ class P11_Helper:
                                   pub_cka_copyable=True, pub_cka_derive=False,
                                   pub_cka_encrypt=False,
                                   pub_cka_modifiable=True,
-                                  pub_cka_private=True, pub_cka_trusted=False,
+                                  pub_cka_private=True,
                                   pub_cka_verify=False,
                                   pub_cka_verify_recover=False,
                                   pub_cka_wrap=True,
@@ -1076,7 +1073,6 @@ class P11_Helper:
             pub_cka_encrypt,
             pub_cka_modifiable,
             pub_cka_private,
-            pub_cka_trusted,
             pub_cka_verify,
             pub_cka_verify_recover,
             pub_cka_wrap,
@@ -1118,7 +1114,7 @@ class P11_Helper:
 
         # Process keyword boolean arguments
         (_pub_cka_copyable_ptr, pub_cka_derive_ptr, pub_cka_encrypt_ptr,
-         pub_cka_modifiable_ptr, pub_cka_private_ptr, pub_cka_trusted_ptr,
+         pub_cka_modifiable_ptr, pub_cka_private_ptr,
          pub_cka_verify_ptr, pub_cka_verify_recover_ptr, pub_cka_wrap_ptr,
          ) = convert_py2bool(attrs_pub)
         (priv_cka_always_authenticate_ptr, _priv_cka_copyable_ptr,
@@ -1135,13 +1131,10 @@ class P11_Helper:
             (CKA_TOKEN, true_ptr, sizeof(CK_BBOOL)),
             (CKA_MODULUS_BITS, modulus_bits_ptr, sizeof(CK_ULONG)),
             (CKA_PUBLIC_EXPONENT, public_exponent, 3),
-            # TODO Softhsm doesn't support it
-            # (CKA_COPYABLE, pub_cka_copyable_p, sizeof(CK_BBOOL)),
             (CKA_DERIVE, pub_cka_derive_ptr, sizeof(CK_BBOOL)),
             (CKA_ENCRYPT, pub_cka_encrypt_ptr, sizeof(CK_BBOOL)),
             (CKA_MODIFIABLE, pub_cka_modifiable_ptr, sizeof(CK_BBOOL)),
             (CKA_PRIVATE, pub_cka_private_ptr, sizeof(CK_BBOOL)),
-            (CKA_TRUSTED, pub_cka_trusted_ptr, sizeof(CK_BBOOL)),
             (CKA_VERIFY, pub_cka_verify_ptr, sizeof(CK_BBOOL)),
             (CKA_VERIFY_RECOVER, pub_cka_verify_recover_ptr, sizeof(CK_BBOOL)),
             (CKA_WRAP, pub_cka_wrap_ptr, sizeof(CK_BBOOL)),
@@ -1359,7 +1352,7 @@ class P11_Helper:
 
     def _import_RSA_public_key(self, label, label_length, id, id_length, pkey,
                                cka_copyable, cka_derive, cka_encrypt,
-                               cka_modifiable, cka_private, cka_trusted,
+                               cka_modifiable, cka_private,
                                cka_verify, cka_verify_recover, cka_wrap):
         """
         Import RSA public key
@@ -1392,13 +1385,10 @@ class P11_Helper:
             (CKA_LABEL, label, label_length),
             (CKA_MODULUS, modulus, modulus_len),
             (CKA_PUBLIC_EXPONENT, exponent, exponent_len),
-            # TODO Softhsm doesn't support it
-            # (CKA_COPYABLE, cka_copyable, sizeof(CK_BBOOL)),
             (CKA_DERIVE, cka_derive, sizeof(CK_BBOOL)),
             (CKA_ENCRYPT, cka_encrypt, sizeof(CK_BBOOL)),
             (CKA_MODIFIABLE, cka_modifiable, sizeof(CK_BBOOL)),
             (CKA_PRIVATE, cka_private, sizeof(CK_BBOOL)),
-            (CKA_TRUSTED, cka_trusted, sizeof(CK_BBOOL)),
             (CKA_VERIFY, cka_verify, sizeof(CK_BBOOL)),
             (CKA_VERIFY_RECOVER, cka_verify_recover, sizeof(CK_BBOOL)),
             (CKA_WRAP, cka_wrap, sizeof(CK_BBOOL)),
@@ -1415,7 +1405,7 @@ class P11_Helper:
     def import_public_key(self, label, id, data, cka_copyable=True,
                           cka_derive=False, cka_encrypt=False,
                           cka_modifiable=True, cka_private=True,
-                          cka_trusted=False, cka_verify=True,
+                          cka_verify=True,
                           cka_verify_recover=True, cka_wrap=False):
         """
         Import RSA public key
@@ -1435,7 +1425,6 @@ class P11_Helper:
             cka_encrypt,
             cka_modifiable,
             cka_private,
-            cka_trusted,
             cka_verify,
             cka_verify_recover,
             cka_wrap,
@@ -1448,7 +1437,7 @@ class P11_Helper:
 
         # Process keyword boolean arguments
         (cka_copyable_ptr, cka_derive_ptr, cka_encrypt_ptr, cka_modifiable_ptr,
-         cka_private_ptr, cka_trusted_ptr, cka_verify_ptr,
+         cka_private_ptr, cka_verify_ptr,
          cka_verify_recover_ptr, cka_wrap_ptr,) = convert_py2bool(attrs_pub)
 
         # decode from ASN1 DER
@@ -1464,7 +1453,6 @@ class P11_Helper:
                                               cka_encrypt_ptr,
                                               cka_modifiable_ptr,
                                               cka_private_ptr,
-                                              cka_trusted_ptr,
                                               cka_verify_ptr,
                                               cka_verify_recover_ptr,
                                               cka_wrap_ptr)
@@ -1814,13 +1802,14 @@ MECH_RSA_PKCS = CKM_RSA_PKCS
 MECH_RSA_PKCS_OAEP = CKM_RSA_PKCS_OAEP
 MECH_AES_KEY_WRAP = CKM_AES_KEY_WRAP
 MECH_AES_KEY_WRAP_PAD = CKM_AES_KEY_WRAP_PAD
+MECH_AES_KEY_WRAP_KWP = CKM_AES_KEY_WRAP_KWP
 
 
 def gen_key_id(key_id_len=16):
     """
-    Generate random softhsm KEY_ID
+    Generate random PKCS#11 KEY_ID
     :param key_id_len: this should be 16
-    :return: random softhsm KEY_ID in bytes representation
+    :return: random KEY_ID in bytes representation
     """
     return struct.pack(
         "B" * key_id_len,  # key_id must be bytes
@@ -1834,7 +1823,7 @@ def generate_master_key(p11, keylabel="dnssec-master", key_length=16,
 
     key_id = None
     while True:
-        # check if key with this ID exist in LDAP or softHSM
+        # check if key with this ID already exists
         # id is 16 Bytes long
         key_id = gen_key_id()
         keys = p11.find_keys(KEY_CLASS_SECRET_KEY,
@@ -1860,3 +1849,29 @@ def generate_master_key(p11, keylabel="dnssec-master", key_length=16,
             # compare IDs not handle
             if key_id != p11.get_attribute(handle, CKA_ID):
                 p11.set_attribute(handle, CKA_WRAP, False)
+
+
+def init_token(library_path, label, so_pin, user_pin):
+    """Initialize a new PKCS#11 token using pkcs11-tool.
+
+    Creates the token, sets the SO PIN and user PIN.
+    """
+    from ipaplatform.paths import paths
+    from ipapython.ipautil import run
+
+    run([
+        paths.PKCS11_TOOL,
+        '--module', library_path,
+        '--init-token',
+        '--label', label,
+        '--so-pin', so_pin,
+    ])
+    run([
+        paths.PKCS11_TOOL,
+        '--module', library_path,
+        '--init-pin',
+        '--token-label', label,
+        '--login',
+        '--so-pin', so_pin,
+        '--new-pin', user_pin,
+    ])

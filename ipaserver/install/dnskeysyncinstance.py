@@ -45,32 +45,32 @@ def remove_replica_public_keys(hostname):
     keysyncd.remove_replica_public_keys(hostname)
 
 
-def write_softhsm_config():
-    softhsm_conf_txt = (
-        "# SoftHSM v2 configuration file \n"
-        "directories.tokendir = %(tokens_dir)s\n"
-        "objectstore.backend = file"
-    ) % {
-        'tokens_dir': paths.DNSSEC_TOKENS_DIR,
-    }
-    logger.debug("Creating new softhsm config file")
-    with open(paths.DNSSEC_SOFTHSM2_CONF, 'w') as f:
+def write_kryoptic_config():
+    """Generate and write the Kryoptic PKCS#11 TOML configuration file."""
+    kryoptic_db = os.path.join(paths.DNSSEC_TOKENS_DIR, "kryoptic.sql")
+    kryoptic_conf_txt = (
+        "# Kryoptic PKCS#11 configuration\n"
+        "\n"
+        "[[slots]]\n"
+        "slot = 1\n"
+        'dbtype = "sqlite"\n'
+        'dbargs = "%s"\n' % kryoptic_db
+    )
+    logger.debug("Creating Kryoptic config file %s", paths.DNSSEC_KRYOPTIC_CONF)
+    with open(paths.DNSSEC_KRYOPTIC_CONF, 'w') as f:
         os.fchmod(f.fileno(), 0o644)
-        f.write(softhsm_conf_txt)
+        f.write(kryoptic_conf_txt)
 
 
 def initialize_pkcs11_token(pin, pin_so):
-    command = [
-        paths.SOFTHSM2_UTIL,
-        '--init-token',
-        '--free',  # use random free slot
-        '--label', DNSSEC_TOKEN_LABEL,
-        '--pin', pin,
-        '--so-pin', pin_so,
-    ]
-    logger.debug("Initializing tokens")
-    os.environ["SOFTHSM2_CONF"] = paths.DNSSEC_SOFTHSM2_CONF
-    ipautil.run(command, nolog=(pin, pin_so,))
+    logger.debug("Initializing PKCS#11 token")
+    os.environ["KRYOPTIC_CONF"] = paths.DNSSEC_KRYOPTIC_CONF
+    _ipap11helper.init_token(
+        paths.LIBKRYOPTIC_SO,
+        label=DNSSEC_TOKEN_LABEL,
+        so_pin=pin_so,
+        user_pin=pin,
+    )
 
 
 class DNSKeySyncInstance(service.Service):
@@ -198,7 +198,7 @@ class DNSKeySyncInstance(service.Service):
         opensslcnf_tmpl = None
         conf_file_dict = {
             'CRYPTO_POLICY_FILE': paths.CRYPTO_POLICY_OPENSSLCNF_FILE,
-            'PKCS11_MODULE': paths.LIBSOFTHSM2_SO,
+            'PKCS11_MODULE': paths.LIBKRYOPTIC_SO,
             'PKCS11_PIN': paths.DNSSEC_HSM_PIN,
         }
         if constants.NAMED_OPENSSL_ENGINE is not None:
@@ -240,7 +240,7 @@ class DNSKeySyncInstance(service.Service):
 
         directivesetter.set_directive(
             sysconfig,
-            'SOFTHSM2_CONF', paths.DNSSEC_SOFTHSM2_CONF,
+            'KRYOPTIC_CONF', paths.DNSSEC_KRYOPTIC_CONF,
             quotes=False, separator='=')
 
         if any([constants.NAMED_OPENSSL_ENGINE is not None,
@@ -282,7 +282,7 @@ class DNSKeySyncInstance(service.Service):
         sysconfig = paths.SYSCONFIG_IPA_DNSKEYSYNCD
         directivesetter.set_directive(
             sysconfig,
-            'SOFTHSM2_CONF', paths.DNSSEC_SOFTHSM2_CONF,
+            'KRYOPTIC_CONF', paths.DNSSEC_KRYOPTIC_CONF,
             quotes=False, separator='=')
 
         directivesetter.set_directive(
@@ -313,7 +313,8 @@ class DNSKeySyncInstance(service.Service):
             # chown ods:named
             constants.ODS_USER.chown(paths.IPA_DNSSEC_DIR,
                                      gid=constants.NAMED_GROUP.gid)
-        write_softhsm_config()
+
+        write_kryoptic_config()
 
         self.setup_named_openssl_conf()
         self.setup_named_sysconfig()
@@ -370,9 +371,9 @@ class DNSKeySyncInstance(service.Service):
         with open(paths.DNSSEC_HSM_PIN, "r") as f:
                 pin = f.read()
 
-        os.environ["SOFTHSM2_CONF"] = paths.DNSSEC_SOFTHSM2_CONF
+        os.environ["KRYOPTIC_CONF"] = paths.DNSSEC_KRYOPTIC_CONF
         p11 = _ipap11helper.P11_Helper(
-            DNSSEC_TOKEN_LABEL, pin, paths.LIBSOFTHSM2_SO)
+            DNSSEC_TOKEN_LABEL, pin, paths.LIBKRYOPTIC_SO)
 
         try:
             # generate replica keypair
@@ -564,8 +565,10 @@ class DNSKeySyncInstance(service.Service):
         # new token database
         # do not delete *so pin*, user can need it to get token data
         ipautil.remove_file(paths.DNSSEC_HSM_PIN)
-        ipautil.remove_file(paths.DNSSEC_SOFTHSM2_CONF)
+        ipautil.remove_file(paths.DNSSEC_KRYOPTIC_CONF)
         ipautil.remove_file(paths.DNSSEC_OPENSSL_CONF)
+        # clean up legacy SoftHSM config if present
+        ipautil.remove_file(paths.DNSSEC_SOFTHSM2_CONF)
 
         ipautil.rmtree(paths.IPA_DNSSEC_DIR)
 

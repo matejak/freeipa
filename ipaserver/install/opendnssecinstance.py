@@ -68,7 +68,7 @@ class OpenDNSSECInstance(service.Service):
             service_desc="OpenDNSSEC enforcer daemon",
         )
         self.conf_file_dict = {
-            'PKCS11_LIB': paths.LIBSOFTHSM2_SO,
+            'PKCS11_LIB': paths.LIBKRYOPTIC_SO,
             'TOKEN_LABEL': DNSSEC_TOKEN_LABEL,
             'KASP_DB': paths.OPENDNSSEC_KASP_DB,
             'ODS_USER': constants.ODS_USER,
@@ -186,8 +186,8 @@ class OpenDNSSECInstance(service.Service):
                 os.fchmod(f.fileno(), 0o644)
 
         directivesetter.set_directive(paths.SYSCONFIG_ODS,
-                                      'SOFTHSM2_CONF',
-                                      paths.DNSSEC_SOFTHSM2_CONF,
+                                      'KRYOPTIC_CONF',
+                                      paths.DNSSEC_KRYOPTIC_CONF,
                                       quotes=False, separator='=')
 
     def __setup_ownership_file_modes(self):
@@ -226,9 +226,9 @@ class OpenDNSSECInstance(service.Service):
         with open(paths.DNSSEC_HSM_PIN, "r") as f:
             pin = f.read()
 
-        os.environ["SOFTHSM2_CONF"] = paths.DNSSEC_SOFTHSM2_CONF
+        os.environ["KRYOPTIC_CONF"] = paths.DNSSEC_KRYOPTIC_CONF
         p11 = p11helper.P11_Helper(
-            DNSSEC_TOKEN_LABEL, pin, paths.LIBSOFTHSM2_SO)
+            DNSSEC_TOKEN_LABEL, pin, paths.LIBKRYOPTIC_SO)
         try:
             # generate master key
             logger.debug("Creating master key")

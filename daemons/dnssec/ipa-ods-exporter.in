@@ -706,7 +706,7 @@ ldapkeydb = LdapKeyDB(ldap, DN(('cn', 'keys'),
                                ipalib.api.env.container_dns,
                                ipalib.api.env.basedn))
 localhsm = LocalHSM(
-    paths.LIBSOFTHSM2_SO, DNSSEC_TOKEN_LABEL,
+    paths.LIBKRYOPTIC_SO, DNSSEC_TOKEN_LABEL,
     open(paths.DNSSEC_HSM_PIN).read())
 
 ldap2master_replica_keys_sync(ldapkeydb, localhsm)

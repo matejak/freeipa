@@ -689,8 +689,8 @@ def _set_wrapping_mech_parameters(mech_type, mech):
             CKM_RSA_PKCS,
             CKM_AES_KEY_WRAP,
             CKM_AES_KEY_WRAP_PAD,
+            CKM_AES_KEY_WRAP_KWP,
     ):
-        #   CKM_AES_KEY_WRAP_KWP is supported in PKCS#11 > 3
         mech.pParameter = NULL
         mech.ulParameterLen = 0
     elif mech_type == CKM_RSA_PKCS_OAEP:
@@ -1853,3 +1853,29 @@ def generate_master_key(p11, keylabel="dnssec-master", key_length=16,
             # compare IDs not handle
             if key_id != p11.get_attribute(handle, CKA_ID):
                 p11.set_attribute(handle, CKA_WRAP, False)
+
+
+def init_token(library_path, label, so_pin, user_pin):
+    """Initialize a new PKCS#11 token using pkcs11-tool.
+
+    Creates the token, sets the SO PIN and user PIN.
+    """
+    from ipaplatform.paths import paths
+    from ipapython.ipautil import run
+
+    run([
+        paths.PKCS11_TOOL,
+        '--module', library_path,
+        '--init-token',
+        '--label', label,
+        '--so-pin', so_pin,
+    ])
+    run([
+        paths.PKCS11_TOOL,
+        '--module', library_path,
+        '--init-pin',
+        '--token-label', label,
+        '--login',
+        '--so-pin', so_pin,
+        '--new-pin', user_pin,
+    ])

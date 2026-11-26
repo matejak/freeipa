@@ -321,7 +321,7 @@ def install_check(standalone, api, replica, options, hostname):
             # check if replica can be the DNSSEC master
             cmd = [paths.IPA_DNSKEYSYNCD_REPLICA]
             environment = {
-                "SOFTHSM2_CONF": paths.DNSSEC_SOFTHSM2_CONF,
+                "KRYOPTIC_CONF": paths.DNSSEC_KRYOPTIC_CONF,
             }
 
             # stop dnskeysyncd before test

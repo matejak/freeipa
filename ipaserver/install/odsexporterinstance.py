@@ -65,7 +65,7 @@ class ODSExporterInstance(service.Service):
     def __setup_key_exporter(self):
         directivesetter.set_directive(
             paths.SYSCONFIG_IPA_ODS_EXPORTER,
-            'SOFTHSM2_CONF', paths.DNSSEC_SOFTHSM2_CONF,
+            'KRYOPTIC_CONF', paths.DNSSEC_KRYOPTIC_CONF,
             quotes=False, separator='=')
 
     def __setup_principal(self):
